@@ -150,7 +150,7 @@ WITH_BOOST_default=YES
 
 # glibc 2.26+ removed RPC support, so a different library must be used for that
 # Generally you will need to enable this option on newer systems
-USE_TIRPC=NO
+USE_TIRPC_default=$(if $(tirpcinc_DIR)/rpc/rpc.h,YES,NO)
 
 # Define an install location
 INSTALL_DIR=$(TOPDIR)
