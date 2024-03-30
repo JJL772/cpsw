@@ -28,7 +28,7 @@ PACKAGE_TOP=/afs/slac/g/lcls/package
 
 # ARCHES += xxx yyy
 
-ARCHES += buildroot-2019.08-x86_64 buildroot-2019.08-i686 buildroot-2019.08-arm
+#ARCHES += buildroot-2019.08-x86_64 buildroot-2019.08-i686 buildroot-2019.08-arm
 
 # Next, you need to define prefixes (which may include
 # absolute paths) so that e.g., $(CROSS_xxx)gcc can be
@@ -126,6 +126,7 @@ WITH_SHARED_LIBRARIES_default=YES
 # port is incomplete and does not support asyncronous getVal() ATM.
 #
 FOUND_BOOST_PY=$(if $(boostlib_DIR),$(if $(wildcard $(boostlib_DIR)/libboost_python*),YES,NO),YES)
+FOUND_BOOST_PY=YES
 
 #Default defined in 'defs.mak':
 #  use CYTHON if pyinc_DIR is defined and shared libraries
@@ -165,3 +166,5 @@ POSTPROCESS_ENV_SCRIPT_default=true
 
 GIT_RELEASE_TAG := "$(shell git describe --abbrev=4 --dirty --always --tags)"
 USR_CPPFLAGS += -DGIT_RELEASE_TAG=\"$(GIT_RELEASE_TAG)\"
+
+WITH_PYCPSW=PYBIND

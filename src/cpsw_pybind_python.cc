@@ -17,18 +17,23 @@
 #include <cpsw_yaml.h>
 #include <yaml-cpp/yaml.h>
 #include <cpsw_rssi.h>
-#include <boost/python.hpp>
-#include <boost/python/tuple.hpp>
-#include <boost/python/list.hpp>
+//#include <boost/python.hpp>
+//#include <boost/python/tuple.hpp>
+//#include <boost/python/list.hpp>
+#include <pybind11/pybind11.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include <cpsw_debug.h>
 
+#if __cplusplus < 201103L
+#error This file requires C++11 to compile
+#endif
+
 using cpsw::static_pointer_cast;
 
-using namespace boost::python;
+using namespace pybind11;
 using cpsw::weak_ptr;
 
 namespace cpsw_python {
@@ -36,9 +41,9 @@ namespace cpsw_python {
 // Translate CPSW Errors/exceptions into python exceptions
 //
 // This is complicated by the fact that there is no easy
-// way to use 'boost::python': the problem is that exceptions
+// way to use 'pybind11': the problem is that exceptions
 // must be derived from PyErr_Exception (C-API) and AFAIK
-// there is no way to tell the boost::python 'class_' template
+// there is no way to tell the pybind11 'class_' template
 // that a class is derived from a python C-API object; only
 // c++ classes can be bases of class_''.
 // If the python object is not a subclass of PyErr_Exception
@@ -66,7 +71,7 @@ namespace cpsw_python {
 // http://cplusplus-sig.plu5pluscp.narkive.com/uByjeyti/exception-translation-to-python-classes
 //
 // The first argument to PyErr_NewException must be a 'type' object which is
-// derived from PyErr_Exception; AFAIK, boost::python does not support that yet.
+// derived from PyErr_Exception; AFAIK, pybind11 does not support that yet.
 // Thus, we must craft such an object ourselves...
 
 
@@ -110,7 +115,7 @@ public:
 		if ( ! firstTime() )
 			throw std::exception();
 
-		std::string scopeName = extract<std::string>(scope().attr("__name__"));
+		std::string scopeName = cast<std::string>(scope(base).value.attr("__name__"));
 
 		char qualifiedName[ scopeName.size() + name_.size() + 1 + 1 ];
 		::strcpy(qualifiedName, scopeName.c_str());
@@ -124,9 +129,9 @@ public:
 		//CPSW::cdbg() << qualifiedName << " typeObj_ refcnt " << Py_REFCNT( excTypeObj_ ) << "\n";
 
 		// Register in the current scope
-		scope current;
+		scope current(base);
 
-		current.attr(name_.c_str()) = object( handle<>( borrowed( excTypeObj_ ) ) ); \
+		current.value.attr(name_.c_str()) = reinterpret_borrow<object>( handle( excTypeObj_ ) ); \
 
 	//CPSW::cdbg() << "EXCEPTION TYPE REFCOUNT CRE " << Py_REFCNT(getTypeObj()) << "\n";
 	}
@@ -156,12 +161,12 @@ public:
 	register_exception_translator<clazz>( tr_##clazz );
 };
 
-typedef CGetValWrapperContextTmpl<boost::python::object, boost::python::list> CGetValWrapperContext;
+typedef CGetValWrapperContextTmpl<pybind11::object, pybind11::list> CGetValWrapperContext;
 
 // Need wrappers for methods which take
 // shared pointers to const objects which
 // do not seem to be handled correctly
-// by boost::python.
+// by pybind11.
 static void wrap_Path_clear(Path p, shared_ptr<IHub> h)
 {
 Hub hc(h);
@@ -174,14 +179,14 @@ Hub hc(h);
 	return IPath::create(hc);
 }
 
-static boost::python::list wrap_Enum_getItems(Enum enm)
+static pybind11::list wrap_Enum_getItems(Enum enm)
 {
-boost::python::list l;
+pybind11::list l;
 
 IEnum::iterator it  = enm->begin();
 IEnum::iterator ite = enm->end();
 	while ( it != ite ) {
-		l.append( boost::python::make_tuple( *(*it).first, (*it).second ) );
+		l.append( pybind11::make_tuple( *(*it).first, (*it).second ) );
 		++it;
 	}
 
@@ -208,7 +213,7 @@ PyObject  *op = o.ptr(); // no need for incrementing the refcnt while 'o' is ali
 
 class IPyAsyncIO {
 public:
-	virtual void py_callback(boost::python::object) = 0;
+	virtual void py_callback(pybind11::object) = 0;
 
 	~IPyAsyncIO()
 	{
@@ -226,9 +231,10 @@ public:
 	}
 
 	virtual void
-	py_callback(boost::python::object arg)
+	py_callback(pybind11::object arg)
 	{
-		call_method<void>(self_, "callback", arg );
+		//call_method<void>(self_, "callback", arg );
+
 	}
 
 	virtual void callback(CPSWError *err)
@@ -249,15 +255,15 @@ public:
 
 typedef shared_ptr<CAsyncGetValWrapperContext> AsyncGetValWrapperContext;
 
-static boost::python::object wrap_ScalVal_RO_getValAsync(ScalVal_RO val, AsyncGetValWrapperContext ctxt, int from, int to, bool forceNumeric)
+static pybind11::object wrap_ScalVal_RO_getValAsync(ScalVal_RO val, AsyncGetValWrapperContext ctxt, int from, int to, bool forceNumeric)
 {
 	unsigned rval = ctxt->issueGetVal( val.get(), from, to, forceNumeric, ctxt );
 
-	return boost::python::object( rval );
+	return object( rval );
 }
 
 
-static boost::python::object wrap_ScalVal_RO_getVal(ScalVal_RO val, int from, int to, bool forceNumeric)
+static pybind11::object wrap_ScalVal_RO_getVal(ScalVal_RO val, int from, int to, bool forceNumeric)
 {
 	CGetValWrapperContext ctxt;
 
@@ -304,11 +310,13 @@ class CStreamMgr;
 
 typedef shared_ptr<CStreamMgr> StreamMgr;
 
-class CStreamMgr : public virtual IStream, boost::noncopyable {
+class CStreamMgr : public virtual IStream {
 private:
 	Path                 p_;
 	Stream               theStream_;
 	weak_ptr<CStreamMgr> self_;
+
+	CStreamMgr(const CStreamMgr&) = delete;
 
 	CStreamMgr(Path p)
 	: p_( p->clone() )
@@ -333,9 +341,9 @@ public:
 
 	bool
 	__exit__(
-		boost::python::object &exc_type,
-		boost::python::object &exc_value,
-		boost::python::object &traceback)
+		pybind11::object &exc_type,
+		pybind11::object &exc_value,
+		pybind11::object &traceback)
 	{
 		theStream_.reset(); // closes the stream
 		return false; // re-raise exception
@@ -428,15 +436,15 @@ StreamMgr theMgr  = StreamMgr( new CStreamMgr( path ) );
 	return theMgr;
 }
 
-static boost::python::object wrap_DoubleVal_RO_getValAsync(DoubleVal_RO val, AsyncGetValWrapperContext ctxt, int from, int to)
+static pybind11::object wrap_DoubleVal_RO_getValAsync(DoubleVal_RO val, AsyncGetValWrapperContext ctxt, int from, int to)
 {
 unsigned rval = ctxt->issueGetVal( val.get(), from, to, ctxt );
 
-	return boost::python::object( rval );
+	return pybind11::object( rval );
 }
 
 
-static boost::python::object wrap_DoubleVal_RO_getVal(DoubleVal_RO val, int from, int to)
+static pybind11::object wrap_DoubleVal_RO_getVal(DoubleVal_RO val, int from, int to)
 {
 	CGetValWrapperContext ctxt;
 
@@ -456,14 +464,14 @@ IndexRange rng(from, to);
 	if ( ! PySequence_Check( op ) ) {
 		// a single string (attempt to set enum) is also a sequence
 		GILUnlocker allowThreadingWhileWaiting;
-		return val->setVal( extract<double>( o ), &rng );
+		return val->setVal( cast<double>( o ), &rng );
 	}
 
 	unsigned nelms = len(o);
 
 	std::vector<double> v64;
 	for ( unsigned i = 0; i < nelms; ++i ) {
-		v64.push_back( extract<double>( o[i] ) );
+		v64.push_back( cast<double>( o[i] ) );
 	}
 	{
 	GILUnlocker allowThreadingWhileWaiting;
@@ -492,12 +500,14 @@ public:
 
 	virtual bool visitPre(ConstPath here)
 	{
-		return call_method<bool>(self_, "visitPre", here);
+		//return call_method<bool>(self_, "visitPre", here);
+		return reinterpret_borrow<object>(self_).attr("visitPre")(here).cast<bool>();
 	}
 
 	virtual void visitPost(ConstPath here)
 	{
-		call_method<void>(self_, "visitPost", here);
+		//call_method<void>(self_, "visitPost", here);
+		reinterpret_borrow<object>(self_).attr("visitPost")(here);
 	}
 
 	virtual ~WrapPathVisitor()
@@ -518,7 +528,8 @@ public:
 
 	virtual void operator()(YAML::Node &root, YAML::Node &top)
 	{
-		call_method<void>(self_, "__call__", root, top);
+		//call_method<void>(self_, "__call__", root, top);
+		reinterpret_borrow<object>(self_).attr("__call__")(root, top);
 	}
 
 	virtual ~WrapYamlFixup()
@@ -527,7 +538,7 @@ public:
 
 };
 
-static boost::python::tuple
+static pybind11::tuple
 wrap_Hub_getChildren(shared_ptr<IHub> h)
 {
 Hub hc(h);
@@ -540,19 +551,20 @@ Hub hc(h);
 	// I would have preferred to convert the vector 'directly'
 	// into a tuple - but 'make_tuple' kept producing compiler errors...
 
-	boost::python::list l;
+	pybind11::list l;
 
 	while ( it != ite ) {
 		l.append( *it );
 		++it;
 	}
 
-	return boost::python::tuple( l );
+	return pybind11::tuple( l );
 }
 
 // without the overload macros (using 'arg' within 'def') there
 // are problems when a default pointer is set to 0.
 // Complaints about mismatching python and c++ arg types (when using defaults)
+#if TODO
 BOOST_PYTHON_FUNCTION_OVERLOADS( IPath_loadYamlFile_ol,
                                  IPath::loadYamlFile,
                                  1, 4 )
@@ -578,29 +590,29 @@ BOOST_PYTHON_FUNCTION_OVERLOADS( wrap_Path_dumpConfigToYamlString_ol,
 BOOST_PYTHON_FUNCTION_OVERLOADS( setCPSWVerbosity_ol,
                                  setCPSWVerbosity,
                                  0, 2 )
+#endif
 
-
-BOOST_PYTHON_MODULE(pycpsw)
+PYBIND11_MODULE(pycpsw, pycpsw)
 {
 	PyEval_InitThreads();
 
-	register_ptr_to_python<Child                          >();
-	register_ptr_to_python<Children                       >();
-	register_ptr_to_python<Hub                            >();
-	register_ptr_to_python<Path                           >();
-	register_ptr_to_python<ConstPath                      >();
-	register_ptr_to_python<Enum                           >();
-	register_ptr_to_python< shared_ptr<IVal_Base>         >();
-	register_ptr_to_python< shared_ptr<IScalVal_Base>     >();
-	register_ptr_to_python<ScalVal_RO                     >();
-	register_ptr_to_python<ScalVal                        >();
-	register_ptr_to_python<DoubleVal_RO                   >();
-	register_ptr_to_python<DoubleVal                      >();
-	register_ptr_to_python<Command                        >();
-	register_ptr_to_python<Stream                         >();
-	register_ptr_to_python<StreamMgr                      >();
+	//register_ptr_to_python<Child                          >();
+	//register_ptr_to_python<Children                       >();
+	//register_ptr_to_python<Hub                            >();
+	//register_ptr_to_python<Path                           >();
+	//register_ptr_to_python<ConstPath                      >();
+	//register_ptr_to_python<Enum                           >();
+	//register_ptr_to_python< shared_ptr<IVal_Base>         >();
+	//register_ptr_to_python< shared_ptr<IScalVal_Base>     >();
+	//register_ptr_to_python<ScalVal_RO                     >();
+	//register_ptr_to_python<ScalVal                        >();
+	//register_ptr_to_python<DoubleVal_RO                   >();
+	//register_ptr_to_python<DoubleVal                      >();
+	//register_ptr_to_python<Command                        >();
+	//register_ptr_to_python<Stream                         >();
+	//register_ptr_to_python<StreamMgr                      >();
 
-	register_ptr_to_python< shared_ptr<std::string const> >();
+	//register_ptr_to_python< shared_ptr<std::string const> >();
 
 	def("getCPSWVersionString", getCPSWVersionString);
 	def("setCPSWVerbosity"    , setCPSWVerbosity    ,
