@@ -796,7 +796,7 @@ public:
 	virtual void *threadBody()
 	{
 	BufChain  bc;
-	unsigned i,j,k;
+	unsigned i,j,k, b = 0;
 		bc = upstream_->pop( NULL );
 		memcpy( &j, bc->getHead()->getPayload(), sizeof(i) );
 		while ( 1 ) {
@@ -808,6 +808,7 @@ public:
 					fprintf(stderr,"Sink: mismatch @i: %u, j+1: %u\n", i, j+1);
 					throw InternalError("Sink got bad sequence number");
 				}
+				printf("got packet %u\n", i);
 				j = i;
 			}
 

@@ -72,11 +72,18 @@ for ( j=0; j<1; j++ ) {
 	ProtoPort cSink  = ISink::create("Client Sink", sleep_us);
 	unsigned i = 0;
 
-	LoopbackPorts loop = ILoopbackPorts::create(32,dropped_packets_percent,garbl_depth);
+	//LoopbackPorts loop = ILoopbackPorts::create(32,dropped_packets_percent,garbl_depth);
 
+	auto udpIn = IUdpPort::create("127.0.0.1", 12000, dropped_packets_percent, garbl_depth, 4);
+	auto udpOut = IUdpPort::create("127.0.0.1", 12000, dropped_packets_percent, garbl_depth, 4);
+
+	udpIn->connect("127.0.0.1", 12000);
+	udpOut->connect("127.0.0.1", 12000);
+	udpIn->start();
+	udpOut->start();
 	printf("Loopback created\n");
-	client->attach( loop->getPortA() );
-	server->attach( loop->getPortB() );
+	client->attach( udpIn );
+	server->attach( udpOut );
 
 	sSink->attach( server );
 	cSink->attach( client );
