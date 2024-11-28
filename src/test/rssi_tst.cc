@@ -61,9 +61,9 @@ int      rval = 1;
 		return 1;
 	}
 
-	if ( signal(SIGINT, sh) ) {
-		perror("Unable to install signal handler");
-	}
+	//if ( signal(SIGINT, sh) ) {
+	//	perror("Unable to install signal handler");
+	//}
 
 for ( j=0; j<1; j++ ) {
 	RssiPort  server = CRssiPort::create(true);
@@ -74,11 +74,11 @@ for ( j=0; j<1; j++ ) {
 
 	//LoopbackPorts loop = ILoopbackPorts::create(32,dropped_packets_percent,garbl_depth);
 
-	auto udpIn = IUdpPort::create("127.0.0.1", 12000, dropped_packets_percent, garbl_depth, 4);
+	auto udpIn = IUdpPort::create("127.0.0.1", 12001, 0, 0, 4);
 	auto udpOut = IUdpPort::create("127.0.0.1", 12000, dropped_packets_percent, garbl_depth, 4);
 
 	udpIn->connect("127.0.0.1", 12000);
-	udpOut->connect("127.0.0.1", 12000);
+	//udpOut->connect("127.0.0.1", 12000);
 	udpIn->start();
 	udpOut->start();
 	printf("Loopback created\n");

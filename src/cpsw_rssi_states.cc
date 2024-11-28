@@ -194,6 +194,8 @@ bool     hasPayload;
 			}
 		}
 
+		printf("Recv seq=%d, ack=%d\n", hdr.getSeqNo(), hdr.getAckNo());
+
 		// clean out our outgoing buffer
 		context->processAckNumber( hdr.getFlags(), hdr.getAckNo() );
 
